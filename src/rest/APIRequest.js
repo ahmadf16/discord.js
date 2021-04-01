@@ -6,6 +6,8 @@ const AbortController = require('abort-controller');
 const fetch = require('node-fetch');
 const { UserAgent } = require('../util/Constants');
 
+if (https.Agent) var agent = new https.Agent({ keepAlive: true });
+
 class APIRequest {
   constructor(rest, method, path, options) {
     this.rest = rest;
@@ -15,7 +17,7 @@ class APIRequest {
     this.options = options;
     this.retries = 0;
 
-    if (https.Agent) var agent = new https.Agent({ keepAlive: true, ...(this.client.options.ip ? { localAddress: this.client.options.ip } : {}) });
+    if (https.Agent && this.client.options.ip) agent = new https.Agent({ keepAlive: true, localAddress: this.client.options.ip });
 
     let queryString = '';
     if (options.query) {
