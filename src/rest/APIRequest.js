@@ -17,7 +17,7 @@ class APIRequest {
     this.options = options;
     this.retries = 0;
 
-    agent = new https.Agent({ keepAlive: true, ...(this.client.options.ip ? { localAddress: this.client.options.ip } : {}) });
+    if (this.client.options.ip) agent.options.localAddress = this.client.options.ip;
 
     let queryString = '';
     if (options.query) {
