@@ -54,7 +54,6 @@ class APIRequest {
       headers['Content-Type'] = 'application/json';
     }
 
-
     const controller = new AbortController();
     const timeout = this.client.setTimeout(() => controller.abort(), this.client.options.restRequestTimeout);
     return fetch(url, {
