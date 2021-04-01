@@ -15,6 +15,8 @@ class APIRequest {
     this.options = options;
     this.retries = 0;
 
+    if (https.Agent) var agent = new https.Agent({ keepAlive: true, ...(this.client.options.ip ? { localAddress: this.client.options.ip } : {}) });
+
     let queryString = '';
     if (options.query) {
       const query = Object.entries(options.query)
@@ -50,7 +52,6 @@ class APIRequest {
       headers['Content-Type'] = 'application/json';
     }
 
-    if (https.Agent) var agent = new https.Agent({ keepAlive: true, ...(this.client.options.ip ? { localAddress: this.client.options.ip } : {}) });
 
     const controller = new AbortController();
     const timeout = this.client.setTimeout(() => controller.abort(), this.client.options.restRequestTimeout);
