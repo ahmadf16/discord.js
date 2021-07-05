@@ -1,8 +1,16 @@
 'use strict';
 
 const Base = require('./Base');
-const { ChannelTypes } = require('../util/Constants');
-const Snowflake = require('../util/Snowflake');
+let CategoryChannel;
+let DMChannel;
+let NewsChannel;
+let StageChannel;
+let StoreChannel;
+let TextChannel;
+let ThreadChannel;
+let VoiceChannel;
+const { ChannelTypes, ThreadChannelTypes } = require('../util/Constants');
+const SnowflakeUtil = require('../util/SnowflakeUtil');
 
 /**
  * Represents any channel on Discord.
@@ -10,10 +18,10 @@ const Snowflake = require('../util/Snowflake');
  * @abstract
  */
 class Channel extends Base {
-  constructor(client, data) {
+  constructor(client, data, immediatePatch = true) {
     super(client);
 
-    const type = Object.keys(ChannelTypes)[data.type];
+    const type = ChannelTypes[data.type];
     /**
      * The type of the channel, either:
      * * `dm` - a DM channel
@@ -22,10 +30,14 @@ class Channel extends Base {
      * * `category` - a guild category channel
      * * `news` - a guild news channel
      * * `store` - a guild store channel
+     * * `news_thread` - a guild news channel's public thread channel
+     * * `public_thread` - a guild text channel's public thread channel
+     * * `private_thread` - a guild text channel's private thread channel
+     * * `stage` - a guild stage channel
      * * `unknown` - a generic channel of unknown type, could be Channel or GuildChannel
      * @type {string}
      */
-    this.type = type ? type.toLowerCase() : 'unknown';
+    this.type = type?.toLowerCase() ?? 'unknown';
 
     /**
      * Whether the channel has been deleted
@@ -33,12 +45,12 @@ class Channel extends Base {
      */
     this.deleted = false;
 
-    if (data) this._patch(data);
+    if (data && immediatePatch) this._patch(data);
   }
 
   _patch(data) {
     /**
-     * The unique ID of the channel
+     * The channel's id
      * @type {Snowflake}
      */
     this.id = data.id;
@@ -50,7 +62,7 @@ class Channel extends Base {
    * @readonly
    */
   get createdTimestamp() {
-    return Snowflake.deconstruct(this.id).timestamp;
+    return SnowflakeUtil.deconstruct(this.id).timestamp;
   }
 
   /**
@@ -99,55 +111,78 @@ class Channel extends Base {
   }
 
   /**
-   * Indicates whether this channel is text-based.
+   * Indicates whether this channel is text-based
+   * ({@link TextChannel}, {@link DMChannel}, {@link NewsChannel} or {@link ThreadChannel}).
    * @returns {boolean}
    */
   isText() {
     return 'messages' in this;
   }
 
+  /**
+   * Indicates whether this channel is a {@link ThreadChannel}.
+   * @returns {boolean}
+   */
+  isThread() {
+    return ThreadChannelTypes.includes(this.type);
+  }
+
   static create(client, data, guild) {
-    const Structures = require('../util/Structures');
+    if (!CategoryChannel) CategoryChannel = require('./CategoryChannel');
+    if (!DMChannel) DMChannel = require('./DMChannel');
+    if (!NewsChannel) NewsChannel = require('./NewsChannel');
+    if (!StageChannel) StageChannel = require('./StageChannel');
+    if (!StoreChannel) StoreChannel = require('./StoreChannel');
+    if (!TextChannel) TextChannel = require('./TextChannel');
+    if (!ThreadChannel) ThreadChannel = require('./ThreadChannel');
+    if (!VoiceChannel) VoiceChannel = require('./VoiceChannel');
+
     let channel;
     if (!data.guild_id && !guild) {
       if ((data.recipients && data.type !== ChannelTypes.GROUP) || data.type === ChannelTypes.DM) {
-        const DMChannel = Structures.get('DMChannel');
         channel = new DMChannel(client, data);
       } else if (data.type === ChannelTypes.GROUP) {
         const PartialGroupDMChannel = require('./PartialGroupDMChannel');
         channel = new PartialGroupDMChannel(client, data);
       }
     } else {
-      guild = guild || client.guilds.cache.get(data.guild_id);
+      if (!guild) guild = client.guilds.cache.get(data.guild_id);
+
       if (guild) {
         switch (data.type) {
           case ChannelTypes.TEXT: {
-            const TextChannel = Structures.get('TextChannel');
             channel = new TextChannel(guild, data);
             break;
           }
           case ChannelTypes.VOICE: {
-            const VoiceChannel = Structures.get('VoiceChannel');
             channel = new VoiceChannel(guild, data);
             break;
           }
           case ChannelTypes.CATEGORY: {
-            const CategoryChannel = Structures.get('CategoryChannel');
             channel = new CategoryChannel(guild, data);
             break;
           }
           case ChannelTypes.NEWS: {
-            const NewsChannel = Structures.get('NewsChannel');
             channel = new NewsChannel(guild, data);
             break;
           }
           case ChannelTypes.STORE: {
-            const StoreChannel = Structures.get('StoreChannel');
             channel = new StoreChannel(guild, data);
             break;
           }
+          case ChannelTypes.STAGE: {
+            channel = new StageChannel(guild, data);
+            break;
+          }
+          case ChannelTypes.NEWS_THREAD:
+          case ChannelTypes.PUBLIC_THREAD:
+          case ChannelTypes.PRIVATE_THREAD: {
+            channel = new ThreadChannel(guild, data);
+            channel.parent?.threads.cache.set(channel.id, channel);
+            break;
+          }
         }
-        if (channel) guild.channels.cache.set(channel.id, channel);
+        if (channel) guild.channels?.cache.set(channel.id, channel);
       }
     }
     return channel;
@@ -159,3 +194,8 @@ class Channel extends Base {
 }
 
 module.exports = Channel;
+
+/**
+ * @external APIChannel
+ * @see {@link https://discord.com/developers/docs/resources/channel#channel-object}
+ */
